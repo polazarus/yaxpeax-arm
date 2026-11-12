@@ -4816,6 +4816,27 @@ fn test_reserved() {
 }
 
 #[test]
+fn test_unallocated_encodings_are_errors() {
+    // these used to decode as `Ok` with `Opcode::Invalid`, which is not a value
+    // a consumer can do anything with: an unallocated encoding is UNDEFINED
+    // (Arm ARM F1.7.3), so it has to be a decode error. found by the
+    // differential sweep against capstone; each word is from a different
+    // decoder path that returned `Ok` with an "invalid" instruction.
+    test_err([0xbd, 0x0c, 0x7c, 0xed], DecodeError::InvalidOpcode); // simd load/store
+    test_err([0xf7, 0x3f, 0xad, 0xb2], DecodeError::InvalidOpcode); // move wide, opc=01
+    test_err([0xe4, 0x8b, 0x9e, 0x68], DecodeError::InvalidOpcode); // ldp/stp, opc_L=010
+    test_err([0x00, 0x0e, 0xeb, 0xe8], DecodeError::InvalidOpcode); // ldp/stp, simd opc_L
+    test_err([0x00, 0x08, 0x28, 0x0e], DecodeError::InvalidOpcode); // no opcode assigned
+
+    // neighbouring allocated encodings from the same decoder paths must still
+    // decode, so the fix doesn't over-reject.
+    test_display([0x69, 0x13, 0x08, 0x2d], "stp s9, s4, [x27, #0x40]");
+    test_display([0x00, 0x00, 0x80, 0xd2], "mov x0, #0x0");
+    test_display([0x00, 0x00, 0x00, 0xad], "stp q0, q0, [x0]");
+    test_display([0x00, 0x84, 0x20, 0x0e], "add v0.8b, v0.8b, v0.8b");
+}
+
+#[test]
 fn test_system() {
     // capstone says `msr s0_0_c2_c0_0, xzr`, but this looks like an unallocated encoding?
     test_err([0x1f, 0x20, 0x00, 0xd5], DecodeError::InvalidOpcode);

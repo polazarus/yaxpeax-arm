@@ -3,6 +3,11 @@
 * ARMv7: `LDRD`/`STRD` with `Rt = 15` are now decode errors rather than panics.
   the second register of the pair is encoded as `Rt + 1`, which used to build
   register 16 and panic even under `allow_nonconforming(true)`.
+* a64: unallocated encodings that previously decoded successfully as an
+  instruction with `Opcode::Invalid` now return `DecodeError::InvalidOpcode`.
+  `Opcode::Invalid` is no longer observable from a successful decode: the
+  decoder also catches paths that returned success without setting an opcode
+  (they left the `Instruction::default()` placeholder in place).
 * the added-in-0.5.0 RRX rotate type now correctly reports rotating by one bit,
   rather than by "0 bits"
 

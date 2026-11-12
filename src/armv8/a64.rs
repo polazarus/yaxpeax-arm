@@ -3249,8 +3249,10 @@ impl Display for Operand {
 pub struct InstDecoder {}
 
 #[allow(non_snake_case)]
-impl Decoder<ARMv8> for InstDecoder {
-    fn decode_into<T: Reader<<ARMv8 as Arch>::Address, <ARMv8 as Arch>::Word>>(&self, inst: &mut Instruction, words: &mut T) -> Result<(), <ARMv8 as Arch>::DecodeError> {
+impl InstDecoder {
+    /// the decode proper. `Decoder::decode_into` wraps this to guarantee that a
+    /// successful decode always names an instruction.
+    fn decode_into_unchecked<T: Reader<<ARMv8 as Arch>::Address, <ARMv8 as Arch>::Word>>(&self, inst: &mut Instruction, words: &mut T) -> Result<(), <ARMv8 as Arch>::DecodeError> {
         let mut word_bytes = [0u8; 4];
         words.next_n(&mut word_bytes)?;
         let word = u32::from_le_bytes(word_bytes);
@@ -7357,7 +7359,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                     ];
                                     return Ok(());
                                 } else {
-                                    inst.opcode = Opcode::Invalid;
                                     return Err(DecodeError::InvalidOperand);
                                 }
                             }
@@ -7418,7 +7419,6 @@ impl Decoder<ARMv8> for InstDecoder {
                             let sf = (word >> 31) & 0x01;
 
                             if S != 1 || o2 != 0 || o3 != 0 {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOpcode);
                             }
 
@@ -7456,7 +7456,6 @@ impl Decoder<ARMv8> for InstDecoder {
                             let sf_op = (word >> 28) & 0x0c;
 
                             if word & 0x20000000 != 0 {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOperand);
                             }
 
@@ -7501,7 +7500,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                 0b1011 |
                                 0b1110 |
                                 0b1111 => {
-                                    inst.opcode = Opcode::Invalid;
                                     return Err(DecodeError::InvalidOpcode);
                                 },
                                 _ => {
@@ -7921,7 +7919,6 @@ impl Decoder<ARMv8> for InstDecoder {
                             // opt (bits 22, 23) must be 0
 
                             if (word >> 22) & 0x03 != 0 {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOperand);
                             }
 
@@ -7982,7 +7979,6 @@ impl Decoder<ARMv8> for InstDecoder {
 
                             let shift = (word >> 22) & 0x03;
                             if shift == 0b11 {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOperand);
                             }
 
@@ -7992,7 +7988,6 @@ impl Decoder<ARMv8> for InstDecoder {
                             let Rm = ((word >> 16) & 0x1f) as u16;
 
                             if size == SizeCode::W && imm6 >= 32 {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOperand);
                             }
 
@@ -8100,7 +8095,6 @@ impl Decoder<ARMv8> for InstDecoder {
                             },
                             0b10 |
                             0b11 => {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOperand);
                             }
                             _ => { unreachable!("shift is two bits"); }
@@ -8174,19 +8168,18 @@ impl Decoder<ARMv8> for InstDecoder {
                         let size = match word >> 29 {
                             0b000 => {
                                 if hw >= 0x10 {
-                                    inst.opcode = Opcode::Invalid;
+                                    return Err(DecodeError::InvalidOpcode);
                                 } else {
                                     inst.opcode = Opcode::MOVN;
                                 }
                                 SizeCode::W
                             },
                             0b001 => {
-                                inst.opcode = Opcode::Invalid;
-                                SizeCode::W
+                                return Err(DecodeError::InvalidOpcode);
                             }
                             0b010 => {
                                 if hw >= 0x10 {
-                                    inst.opcode = Opcode::Invalid;
+                                    return Err(DecodeError::InvalidOpcode);
                                 } else {
                                     inst.opcode = Opcode::MOVZ;
                                 }
@@ -8194,7 +8187,7 @@ impl Decoder<ARMv8> for InstDecoder {
                             },
                             0b011 => {
                                 if hw >= 0x10 {
-                                    inst.opcode = Opcode::Invalid;
+                                    return Err(DecodeError::InvalidOpcode);
                                 } else {
                                     inst.opcode = Opcode::MOVK;
                                 }
@@ -8205,8 +8198,7 @@ impl Decoder<ARMv8> for InstDecoder {
                                 SizeCode::X
                             },
                             0b101 => {
-                                inst.opcode = Opcode::Invalid;
-                                SizeCode::X
+                                return Err(DecodeError::InvalidOpcode);
                             }
                             0b110 => {
                                 inst.opcode = Opcode::MOVZ;
@@ -8281,7 +8273,6 @@ impl Decoder<ARMv8> for InstDecoder {
 
                         let size = if sf_op21 == 0b000 {
                             if No0 != 0b00 || imms >= 0x20 {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOpcode);
                             } else {
                                 inst.opcode = Opcode::EXTR;
@@ -8289,7 +8280,6 @@ impl Decoder<ARMv8> for InstDecoder {
                             }
                         } else if sf_op21 == 0b100 {
                             if No0 != 0b10 {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOpcode);
                             } else {
                                 inst.opcode = Opcode::EXTR;
@@ -8317,7 +8307,6 @@ impl Decoder<ARMv8> for InstDecoder {
                             ];
                             return Ok(());
                         } else {
-                            inst.opcode = Opcode::Invalid;
                             return Err(DecodeError::InvalidOpcode);
                         };
 
@@ -8418,7 +8407,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                         (0b10, 0b0) => Opcode::LDXRB,
                                         (0b10, 0b1) => Opcode::LDAXRB,
                                         _ => {
-                                            inst.opcode = Opcode::Invalid;
                                             return Err(DecodeError::InvalidOpcode);
                                         }
                                     }
@@ -8429,7 +8417,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                         (0b10, 0b0) => Opcode::LDXRH,
                                         (0b10, 0b1) => Opcode::LDAXRH,
                                         _ => {
-                                            inst.opcode = Opcode::Invalid;
                                             return Err(DecodeError::InvalidOpcode);
                                         }
                                     }
@@ -8569,7 +8556,6 @@ impl Decoder<ARMv8> for InstDecoder {
                             (0b11, 0b10, 0b0) => Opcode::LDLAR, // 64-bit
                             (0b11, 0b10, 0b1) => Opcode::LDAR, // 64-bit
                             _ => {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOpcode);
                             }
                         };
@@ -8746,7 +8732,6 @@ impl Decoder<ARMv8> for InstDecoder {
                             0b10 => SIMDSizeCode::Q,
                             0b11 => {
                                 // 11011100_XXXXXXXX_XXXXXXXX_XXXXXXXX
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOpcode);
                             }
                             _ => {
@@ -8858,8 +8843,7 @@ impl Decoder<ARMv8> for InstDecoder {
                                 SizeCode::W
                             },
                             0b010 => {
-                                inst.opcode = Opcode::Invalid;
-                                SizeCode::W
+                                return Err(DecodeError::InvalidOpcode);
                             },
                             0b011 => {
                                 inst.opcode = Opcode::LDPSW;
@@ -8878,8 +8862,7 @@ impl Decoder<ARMv8> for InstDecoder {
                             },
                             0b110 |
                             0b111 => {
-                                inst.opcode = Opcode::Invalid;
-                                SizeCode::X
+                                return Err(DecodeError::InvalidOpcode);
                             }
                             _ => { unreachable!("opc and L are three bits"); }
                         };
@@ -8932,8 +8915,7 @@ impl Decoder<ARMv8> for InstDecoder {
                             },
                             0b110 |
                             0b111 => {
-                                inst.opcode = Opcode::Invalid;
-                                SIMDSizeCode::Q
+                                return Err(DecodeError::InvalidOpcode);
                             }
                             _ => { unreachable!("opc and L are three bits"); }
                         };
@@ -8964,8 +8946,7 @@ impl Decoder<ARMv8> for InstDecoder {
                                 SizeCode::W
                             },
                             0b010 => {
-                                inst.opcode = Opcode::Invalid;
-                                SizeCode::W
+                                return Err(DecodeError::InvalidOpcode);
                             },
                             0b011 => {
                                 inst.opcode = Opcode::LDPSW;
@@ -8984,8 +8965,7 @@ impl Decoder<ARMv8> for InstDecoder {
                             },
                             0b110 |
                             0b111 => {
-                                inst.opcode = Opcode::Invalid;
-                                SizeCode::X
+                                return Err(DecodeError::InvalidOpcode);
                             }
                             _ => { unreachable!("opc and L are three bits"); }
                         };
@@ -9038,8 +9018,7 @@ impl Decoder<ARMv8> for InstDecoder {
                             },
                             0b110 |
                             0b111 => {
-                                inst.opcode = Opcode::Invalid;
-                                SIMDSizeCode::Q
+                                return Err(DecodeError::InvalidOpcode);
                             }
                             _ => { unreachable!("opc and L are three bits"); }
                         };
@@ -9070,8 +9049,7 @@ impl Decoder<ARMv8> for InstDecoder {
                                 SizeCode::W
                             },
                             0b010 => {
-                                inst.opcode = Opcode::Invalid;
-                                SizeCode::W
+                                return Err(DecodeError::InvalidOpcode);
                             },
                             0b011 => {
                                 inst.opcode = Opcode::LDPSW;
@@ -9090,8 +9068,7 @@ impl Decoder<ARMv8> for InstDecoder {
                             },
                             0b110 |
                             0b111 => {
-                                inst.opcode = Opcode::Invalid;
-                                SizeCode::X
+                                return Err(DecodeError::InvalidOpcode);
                             }
                             _ => { unreachable!("opc and L are three bits"); }
                         };
@@ -9144,8 +9121,7 @@ impl Decoder<ARMv8> for InstDecoder {
                             },
                             0b110 |
                             0b111 => {
-                                inst.opcode = Opcode::Invalid;
-                                SIMDSizeCode::Q
+                                return Err(DecodeError::InvalidOpcode);
                             }
                             _ => { unreachable!("opc and L are three bits"); }
                         };
@@ -9339,7 +9315,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                     let index_size = match option & 0x3 {
                                         0b00 |
                                         0b01 => {
-                                            inst.opcode = Opcode::Invalid;
                                             return Err(DecodeError::InvalidOpcode);
                                         },
                                         0b10 => { SizeCode::W }
@@ -9790,7 +9765,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                 ];
                             }
                             0b1011 => {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOpcode);
                             }
                             0b1100 => {
@@ -9821,7 +9795,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                 ];
                             }
                             0b1111 => {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOpcode);
                             }
                             _ => { unreachable!("size and opc are four bits"); }
@@ -10501,7 +10474,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                 inst.opcode = Opcode::DCPS3;
                             }
                             _ => {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOpcode);
                             }
                         }
@@ -10540,7 +10512,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                         // `msr s0_0_c2_c0_0, xzr`. it seems these are more,
                                         // invalid? in which case, return invalid.
                                         if CRn != 0b0100 && op1 != 0b011 {
-                                            inst.opcode = Opcode::Invalid;
                                             return Err(DecodeError::InvalidOpcode);
                                         }
 
@@ -10671,7 +10642,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                                         ];
                                                     }
                                                     _ => {
-                                                        inst.opcode = Opcode::Invalid;
                                                         return Err(DecodeError::InvalidOpcode);
                                                     }
                                                 };
@@ -10703,12 +10673,10 @@ impl Decoder<ARMv8> for InstDecoder {
                                                 ];
                                             }
                                             _ => {
-                                                inst.opcode = Opcode::Invalid;
                                                 return Err(DecodeError::InvalidOpcode);
                                             }
                                         }
                                     } else {
-                                        inst.opcode = Opcode::Invalid;
                                         return Err(DecodeError::InvalidOpcode);
                                     }
                                 }
@@ -10738,7 +10706,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                     // All encodings with L==1 and op0==0b0x are UNDEFINED, except
                                     // for encodings in the area reserved for IMPLEMENTATION
                                     // DEFINED use
-                                    inst.opcode = Opcode::Invalid;
                                     return Err(DecodeError::InvalidOpcode);
                                 }
                                 0b101 => {
@@ -10768,7 +10735,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                     ];
                                 }
                                 _ => {
-                                    inst.opcode = Opcode::Invalid;
                                     return Err(DecodeError::InvalidOpcode);
                                 }
                             }
@@ -10805,7 +10771,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                         Operand::Nothing,
                                     ];
                                 } else {
-                                    inst.opcode = Opcode::Invalid;
                                     return Err(DecodeError::InvalidOpcode);
                                 }
                             },
@@ -10836,7 +10801,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                         Operand::Nothing,
                                     ];
                                 } else {
-                                    inst.opcode = Opcode::Invalid;
                                     return Err(DecodeError::InvalidOpcode);
                                 }
                             },
@@ -10889,7 +10853,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                         ];
                                     }
                                 } else {
-                                    inst.opcode = Opcode::Invalid;
                                     return Err(DecodeError::InvalidOpcode);
                                 }
                             },
@@ -10901,7 +10864,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                 } else if (word & 0x1fffff) == 0x1f0fff {
                                     inst.opcode = Opcode::ERETAB;
                                 } else {
-                                    inst.opcode = Opcode::Invalid;
                                     return Err(DecodeError::InvalidOpcode);
                                 }
                             },
@@ -10909,12 +10871,10 @@ impl Decoder<ARMv8> for InstDecoder {
                                 if (word & 0x1fffff) == 0x1f03e0 {
                                     inst.opcode = Opcode::DRPS;
                                 } else {
-                                    inst.opcode = Opcode::Invalid;
                                     return Err(DecodeError::InvalidOpcode);
                                 }
                             },
                             _ => {
-                                inst.opcode = Opcode::Invalid;
                                 return Err(DecodeError::InvalidOpcode);
                             }
                         }
@@ -10977,7 +10937,6 @@ impl Decoder<ARMv8> for InstDecoder {
                                 return Err(DecodeError::InvalidOpcode);
                             }
                         } else {
-                            inst.opcode = Opcode::Invalid;
                             return Err(DecodeError::InvalidOpcode);
                         }
                     }
@@ -10989,5 +10948,22 @@ impl Decoder<ARMv8> for InstDecoder {
         };
 
         Ok(())
+    }
+}
+
+impl Decoder<ARMv8> for InstDecoder {
+    fn decode_into<T: Reader<<ARMv8 as Arch>::Address, <ARMv8 as Arch>::Word>>(&self, inst: &mut Instruction, words: &mut T) -> Result<(), <ARMv8 as Arch>::DecodeError> {
+        // `Opcode::Invalid` is the placeholder in `Instruction::default()`, not
+        // an instruction. an unallocated encoding is UNDEFINED (Arm ARM
+        // F1.7.3), so a decode that returns `Ok` must have replaced it - this
+        // also catches decode paths that build operands but forget to set an
+        // opcode, which otherwise look like a successfully decoded "invalid".
+        inst.opcode = Opcode::Invalid;
+        let result = self.decode_into_unchecked(inst, words);
+        if result.is_ok() && matches!(inst.opcode, Opcode::Invalid) {
+            return Err(DecodeError::InvalidOpcode);
+        }
+
+        result
     }
 }
