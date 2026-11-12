@@ -4833,8 +4833,26 @@ fn test_unallocated_encodings_are_errors() {
     test_display([0x69, 0x13, 0x08, 0x2d], "stp s9, s4, [x27, #0x40]");
     test_display([0x00, 0x00, 0x80, 0xd2], "mov x0, #0x0");
     test_display([0x00, 0x00, 0x00, 0xad], "stp q0, q0, [x0]");
-    test_display([0x00, 0x84, 0x20, 0x0e], "add v0.8b, v0.8b, v0.8b");
-}
+    test_display([0x00, 0x84, 0x20, 0x0e], "add v0.8b, v0.8b, v0.8b");}
+
+#[test]
+fn test_logical_immediate_n_requires_64_bit() {
+    // `N` selects 64-bit elements in a bitmask immediate; with sf=0 there are
+    // none, and the encoding is UNDEFINED (Arm ARM C6.2.14:
+    // `if sf == '0' && N != '0' then EndOfDecode(Decode_UNDEF)`). the decoded
+    // immediate looked plausible, which is why text comparison against capstone
+    // never flagged it.
+    test_err([0x00, 0x00, 0x40, 0x12], DecodeError::InvalidOpcode); // and  w0, w0, N=1
+    test_err([0x00, 0x00, 0x40, 0x32], DecodeError::InvalidOpcode); // orr
+    test_err([0x00, 0x00, 0x40, 0x52], DecodeError::InvalidOpcode); // eor
+    test_err([0x00, 0x00, 0x40, 0x72], DecodeError::InvalidOpcode); // ands
+    test_err([0x16, 0x53, 0x51, 0x12], DecodeError::InvalidOpcode); // from the sweep
+
+    // the same immediate without N, and the 64-bit forms that may use N, must
+    // still decode.
+    test_display([0x00, 0x00, 0x00, 0x12], "and w0, w0, #0x1");
+    test_display([0x00, 0x00, 0x40, 0x92], "and x0, x0, #0x1");
+    test_display([0x00, 0x00, 0x00, 0x92], "and x0, x0, #0x100000001");}
 
 #[test]
 fn test_system() {
