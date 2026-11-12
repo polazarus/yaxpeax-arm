@@ -11,6 +11,11 @@
 * a64: logical-immediate instructions (`AND`/`ORR`/`EOR`/`ANDS` with an
   immediate) now reject `N = 1` when `sf = 0`. that encoding is UNDEFINED, and
   yaxpeax-arm decoded it with a plausible-looking but invalid immediate.
+* a64: logical shifted-register instructions (`AND`/`ORR`/`EOR`/`ANDS` and the
+  `BIC`/`ORN`/`EON`/`BICS` forms) now reject shift amounts above 31 for 32-bit
+  operations. `sf == 0 && imm6[5] == 1` is UNDEFINED, but yaxpeax-arm decoded
+  them (for example `bic w5, w29, w1, lsl #42`). reported as
+  `DecodeError::InvalidOperand`, matching the add/sub shifted-register decoder.
 
 * the added-in-0.5.0 RRX rotate type now correctly reports rotating by one bit,
   rather than by "0 bits"
