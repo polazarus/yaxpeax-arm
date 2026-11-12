@@ -5,10 +5,18 @@ authors = ["iximeow <yax@iximeow.net>"]
 edition = "2018"
 description = "differential testing between yaxpeax-arm and other disassemblers"
 
+[lib]
+name = "differential_tests"
+path = "src/lib.rs"
+
+[[bin]]
+name = "yaxcmp"
+path = "src/bin/yaxcmp.rs"
+
 [dependencies]
 yaxpeax-arm = { path = "../", version = "*" }
 yaxpeax-arch = { version = "0.3.1", default-features = false, features = [] }
 
 # capstone = "*"
 capstone-sys = { git = "https://github.com/jiegec/capstone-rs.git", rev = "5bfa974dd5c3e9fdc1b4e863e134dcaa9f675d82" } # capstone-5.0.6
-libc = "*"
+rayon = "1"

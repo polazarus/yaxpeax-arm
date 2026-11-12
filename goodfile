@@ -30,3 +30,4 @@ Build.run({"cargo", "rustc", "--no-default-features", "--release", "--", "-C", "
 
 Step.advance("differential")
 Build.run({"cargo", "test", "--release"}, {cwd="differential-tests", name="run capstone differential test"})
+Build.run({"cargo", "run", "--release", "--bin", "yaxcmp", "--", "--arch", "a64", "--range", "0x94000000..0x94100000", "--quiet"}, {cwd="differential-tests", name="yaxcmp smoke run"})
